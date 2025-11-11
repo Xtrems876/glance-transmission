@@ -1,0 +1,5 @@
+---
+# Example Glance configuration snippet to include this extension as a widget
+- type: extension
+  url: http://glance-transmission:8080/transmission?url=http://transmission-host:9091/&username=admin&password=secret
+  allow-potentially-dangerous-html: true

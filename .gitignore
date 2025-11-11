@@ -1,0 +1,17 @@
+# Ignore build artifacts
+/target/
+**/target/
+
+# Ignore Cargo.lock for libraries (if this is a library crate you may want to track it)
+Cargo.lock
+
+# Ignore OS/editor files
+.DS_Store
+.idea/
+.vscode/
+
+# Ignore Docker artifacts
+*.tar.gz
+
+# Ignore local env files
+.env
