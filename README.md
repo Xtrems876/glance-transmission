@@ -4,16 +4,19 @@ A small Glance extension that queries a Transmission RPC and returns a compact H
 
 ## Usage
 
-Run the container and point Glance to the extension URL. The extension exposes a single endpoint:
+- Run the container and point Glance to the extension URL. The extension exposes a single endpoint:
 
-- GET /transmission?url=<transmission_base_url>&username=<user>&password=<pass>
+- GET /transmission?url=<transmission_base_url>
 
-Example:
+Example Glance config (do not put credentials in the URL):
 
 ```yml
 - type: extension
-  url: http://<glance-transmission-host>:8080/transmission?url=http://<transmission-host>:9091/&username=admin&password=secret
+  url: http://<glance-transmission-host>:8080/transmission?url=http://<transmission-host>:9091/transmission/rpc
   allow-potentially-dangerous-html: true
+  headers:
+    X-Transmission-Username: <user>
+    X-Transmission-Password: <pass>
 ```
 
 Notes:
