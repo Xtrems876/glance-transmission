@@ -2,8 +2,8 @@
 /target/
 **/target/
 
-# Ignore Cargo.lock for libraries (if this is a library crate you may want to track it)
-Cargo.lock
+# Cargo.lock should be committed for applications to ensure reproducible builds.
+# Remove the Cargo.lock entry so the lockfile is tracked in the repo.
 
 # Ignore OS/editor files
 .DS_Store
