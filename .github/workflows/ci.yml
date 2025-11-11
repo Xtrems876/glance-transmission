@@ -31,8 +31,31 @@ jobs:
       - name: Build (release)
         run: cargo build --release --locked
 
-      - name: Upload binary artifact
+      - name: Find built binary
+        id: find_binary
+        run: |
+          set -e
+          echo "Searching for built binary..."
+          if [ -f target/release/glance-transmission ]; then
+            echo "bin=target/release/glance-transmission" >> $GITHUB_OUTPUT
+            echo "found=true" >> $GITHUB_OUTPUT
+            echo "Found binary at target/release/glance-transmission"
+          else
+            # Check target/*/release (cross-compile dirs)
+            BIN_PATH=$(find target -maxdepth 2 -type f -name glance-transmission -path "target/*/release/*" | head -n 1 || true)
+            if [ -n "$BIN_PATH" ]; then
+              echo "bin=$BIN_PATH" >> $GITHUB_OUTPUT
+              echo "found=true" >> $GITHUB_OUTPUT
+              echo "Found binary at $BIN_PATH"
+            else
+              echo "found=false" >> $GITHUB_OUTPUT
+              echo "No binary found"
+            fi
+          fi
+
+      - name: Upload binary artifact (if found)
+        if: steps.find_binary.outputs.found == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: glance-transmission-binary
-          path: target/release/glance-transmission || true
+          path: ${{ steps.find_binary.outputs.bin }}
