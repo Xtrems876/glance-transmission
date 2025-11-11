@@ -159,7 +159,6 @@ async fn transmission_handler(req: HttpRequest) -> impl Responder {
     // Compute stats
     let torrents = parsed.arguments.torrents;
     let rate_dl: u64 = torrents.iter().map(|t| t.rate_download).sum();
-    let rate_ul: u64 = torrents.iter().map(|t| t.rate_upload).sum();
     let completed = torrents.iter().filter(|t| (t.percent_done - 1.0).abs() < std::f64::EPSILON).count();
     let leech = torrents.len().saturating_sub(completed);
 
@@ -179,13 +178,14 @@ async fn transmission_handler(req: HttpRequest) -> impl Responder {
         let eta = human_eta(t.eta);
         let speed = human_bytes_per_sec(t.rate_download);
 
-        // simple icon heuristic: downloading => ↓, paused/stalled => ❚❚, otherwise ?
+        // simple icon heuristic: downloading => ↓, paused/stalled => pause, otherwise ?
         let icon = if t.percent_done >= 1.0 - std::f64::EPSILON {
             "✔"
         } else if t.rate_download > 0 {
             "↓"
         } else {
-            "❚❚"
+            // alternatives: "||" (ASCII), "∥" (U+2225), "⏸" (U+23F8), "▍▍" (narrow blocks)
+            "||"
         };
 
         list_items.push_str(&format!(
@@ -200,9 +200,8 @@ async fn transmission_handler(req: HttpRequest) -> impl Responder {
     }
 
     let html = format!(
-        "<div class=\"list\" style=\"--list-gap: 15px;\">\n  <div class=\"flex justify-between text-center\">\n    <div>\n      <div class=\"color-highlight size-h3\">{}</div>\n      <div class=\"size-h6\">DOWNLOADING</div>\n    </div>\n    <div>\n      <div class=\"color-highlight size-h3\">{}</div>\n      <div class=\"size-h6\">UPLOADING</div>\n    </div>\n    <div>\n      <div class=\"color-highlight size-h3\">{}</div>\n      <div class=\"size-h6\">SEEDING</div>\n    </div>\n    <div>\n      <div class=\"color-highlight size-h3\">{}</div>\n      <div class=\"size-h6\">LEECHING</div>\n    </div>\n  </div>\n\n  <!-- Downloading list -->\n  <div style=\"margin-top: 15px;\">\n    <ul class=\"list collapsible-container\" data-collapse-after=\"0\" style=\"--list-gap: 15px;\">\n{}    </ul>\n  </div>\n</div>",
+        "<div class=\"list\" style=\"--list-gap: 15px;\">\n  <div class=\"flex justify-between text-center\">\n    <div>\n      <div class=\"color-highlight size-h3\">{}</div>\n      <div class=\"size-h6\">DOWNLOADING</div>\n    </div>\n    <div>\n      <div class=\"color-highlight size-h3\">{}</div>\n      <div class=\"size-h6\">SEEDING</div>\n    </div>\n    <div>\n      <div class=\"color-highlight size-h3\">{}</div>\n      <div class=\"size-h6\">LEECHING</div>\n    </div>\n  </div>\n\n  <!-- Downloading list -->\n  <div style=\"margin-top: 15px;\">\n    <ul class=\"list collapsible-container\" data-collapse-after=\"0\" style=\"--list-gap: 15px;\">\n{}    </ul>\n  </div>\n</div>",
         human_bytes_per_sec(rate_dl),
-        human_bytes_per_sec(rate_ul),
         completed,
         leech,
         list_items
