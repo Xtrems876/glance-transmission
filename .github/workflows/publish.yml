@@ -32,7 +32,8 @@ jobs:
       - name: Set image tags
         id: set_tags
         run: |
-          IMAGE=ghcr.io/${{ github.repository_owner }}/glance-transmission
+          # GHCR requires lowercase repository names; normalize owner to lowercase
+          IMAGE=ghcr.io/${{ toLower(github.repository_owner) }}/glance-transmission
           if [ "${{ github.ref_type }}" = "tag" ]; then
             echo "tags=${IMAGE}:${{ github.ref_name }},${IMAGE}:latest" >> $GITHUB_OUTPUT
           else
