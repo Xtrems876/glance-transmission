@@ -21,6 +21,7 @@ pub struct TransmissionTorrent {
     pub status: i32,
 
     #[serde(rename = "rateUpload")]
+    #[serde(default)]
     pub rate_upload: u64,
 }
 

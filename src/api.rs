@@ -43,6 +43,10 @@ fn human_eta(opt: Option<i64>) -> String {
 #[derive(Deserialize)]
 struct QueryParams {
     url: Option<String>,
+    // optional view: when set to "basic" only the summary is shown (no individual torrents)
+    view: Option<String>,
+    // optional mode: when set to "upload" include upload column in the summary
+    mode: Option<String>,
 }
 
 fn add_widget_headers(builder: &mut actix_web::HttpResponseBuilder) {
@@ -72,9 +76,19 @@ async fn transmission_handler(req: HttpRequest) -> impl Responder {
 
     let client = reqwest::Client::builder().danger_accept_invalid_certs(false).build().unwrap();
 
+    // Interpret optional query params
+    let is_basic_view = params.view.as_deref().map(|s| s.eq_ignore_ascii_case("basic")).unwrap_or(false);
+    let is_upload_mode = params.mode.as_deref().map(|s| s.eq_ignore_ascii_case("upload")).unwrap_or(false);
+
+    // Request fields from Transmission RPC. Include upload rate only when requested via mode=upload.
+    let mut fields: Vec<&str> = vec!["name", "percentDone", "eta", "rateDownload", "leftUntilDone", "status"];
+    if is_upload_mode {
+        fields.push("rateUpload");
+    }
+
     let body = serde_json::json!({
         "method": "torrent-get",
-        "arguments": { "fields": ["name", "percentDone", "eta", "rateDownload", "leftUntilDone", "status", "rateUpload"] }
+        "arguments": { "fields": fields }
     });
 
     let mut headers = reqwest::header::HeaderMap::new();
@@ -159,6 +173,7 @@ async fn transmission_handler(req: HttpRequest) -> impl Responder {
     // Compute stats
     let torrents = parsed.arguments.torrents;
     let rate_dl: u64 = torrents.iter().map(|t| t.rate_download).sum();
+    let rate_ul: u64 = if is_upload_mode { torrents.iter().map(|t| t.rate_upload).sum() } else { 0 };
     let completed = torrents.iter().filter(|t| (t.percent_done - 1.0).abs() < std::f64::EPSILON).count();
     let leech = torrents.len().saturating_sub(completed);
 
@@ -171,7 +186,8 @@ async fn transmission_handler(req: HttpRequest) -> impl Responder {
     ongoing.sort_by(|a, b| b.percent_done.partial_cmp(&a.percent_done).unwrap_or(std::cmp::Ordering::Equal));
     let max_show = 5usize;
     let mut list_items = String::new();
-    for t in ongoing.iter().take(max_show) {
+    if !is_basic_view {
+        for t in ongoing.iter().take(max_show) {
         let name = html_escape(&t.name.as_deref().unwrap_or("(unknown)"));
         let pct = (t.percent_done * 100.0).clamp(0.0, 100.0);
         let pct_str = format!("{:.1}", pct);
@@ -197,15 +213,32 @@ async fn transmission_handler(req: HttpRequest) -> impl Responder {
             speed,
             eta
         ));
+        }
     }
 
-    let html = format!(
-        "<div class=\"list\" style=\"--list-gap: 15px;\">\n  <div class=\"flex justify-between text-center\">\n    <div>\n      <div class=\"color-highlight size-h3\">{}</div>\n      <div class=\"size-h6\">DOWNLOADING</div>\n    </div>\n    <div>\n      <div class=\"color-highlight size-h3\">{}</div>\n      <div class=\"size-h6\">SEEDING</div>\n    </div>\n    <div>\n      <div class=\"color-highlight size-h3\">{}</div>\n      <div class=\"size-h6\">LEECHING</div>\n    </div>\n  </div>\n\n  <!-- Downloading list -->\n  <div style=\"margin-top: 15px;\">\n    <ul class=\"list collapsible-container\" data-collapse-after=\"0\" style=\"--list-gap: 15px;\">\n{}    </ul>\n  </div>\n</div>",
-        human_bytes_per_sec(rate_dl),
-        completed,
-        leech,
-        list_items
-    );
+    let list_section = if is_basic_view {
+        String::new()
+    } else {
+        format!("  <!-- Downloading list -->\n  <div style=\"margin-top: 15px;\">\n    <ul class=\"list collapsible-container\" data-collapse-after=\"0\" style=\"--list-gap: 15px;\">\n{}    </ul>\n  </div>", list_items)
+    };
+
+    let html = if is_upload_mode {
+        format!(
+            "<div class=\"list\" style=\"--list-gap: 15px;\">\n  <div class=\"flex justify-between text-center\">\n    <div>\n      <div class=\"color-highlight size-h3\">{}</div>\n      <div class=\"size-h6\">DOWNLOADING</div>\n    </div>\n    <div>\n      <div class=\"color-highlight size-h3\">{}</div>\n      <div class=\"size-h6\">UPLOADING</div>\n    </div>\n    <div>\n      <div class=\"color-highlight size-h3\">{}</div>\n      <div class=\"size-h6\">SEEDING</div>\n    </div>\n  </div>\n\n  {list_section}\n</div>",
+            human_bytes_per_sec(rate_dl),
+            human_bytes_per_sec(rate_ul),
+            completed,
+            list_section = list_section
+        )
+    } else {
+        format!(
+            "<div class=\"list\" style=\"--list-gap: 15px;\">\n  <div class=\"flex justify-between text-center\">\n    <div>\n      <div class=\"color-highlight size-h3\">{}</div>\n      <div class=\"size-h6\">DOWNLOADING</div>\n    </div>\n    <div>\n      <div class=\"color-highlight size-h3\">{}</div>\n      <div class=\"size-h6\">SEEDING</div>\n    </div>\n    <div>\n      <div class=\"color-highlight size-h3\">{}</div>\n      <div class=\"size-h6\">LEECHING</div>\n    </div>\n  </div>\n\n  {list_section}\n</div>",
+            human_bytes_per_sec(rate_dl),
+            completed,
+            leech,
+            list_section = list_section
+        )
+    };
 
     let mut builder = HttpResponse::Ok();
     add_widget_headers(&mut builder);
