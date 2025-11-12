@@ -2,6 +2,8 @@
 
 A small Glance extension that queries a Transmission RPC and returns a widget.
 
+![glance-transmission widget](docs/widget.png)
+
 ## Usage
 
 Run the container and point Glance to the extension URL.
